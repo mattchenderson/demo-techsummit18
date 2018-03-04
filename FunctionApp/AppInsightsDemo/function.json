@@ -1,0 +1,13 @@
+{
+  "bindings": [
+    {
+      "type": "eventHubTrigger",
+      "name": "myEventHubMessage",
+      "direction": "in",
+      "path": "brk2050-hub",
+      "connection": "brk2050_RootManageSharedAccessKey_EVENTHUB",
+      "consumerGroup": "$Default"
+    }
+  ],
+  "disabled": false
+}

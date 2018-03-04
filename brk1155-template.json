@@ -1,0 +1,282 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "resourcename_base": {
+            "type": "string",
+            "defaultValue": "brk1155"
+        },
+        "twitter_1_Connection_DisplayName": {
+            "type": "string",
+            "defaultValue": "brk1155-twitter"
+        },
+        "twitter_1_Connection_Name": {
+            "type": "string",
+            "defaultValue": "twitter"
+        },
+        "cognitiveservicestextanalytics_1_Connection_DisplayName": {
+            "type": "string",
+            "defaultValue": "brk1155-cognitive"
+        },
+        "cognitiveservicestextanalytics_1_Connection_Name": {
+            "type": "string",
+            "defaultValue": "cognitiveservicestextanalytics"
+        },
+        "teams_1_Connection_DisplayName": {
+            "type": "string",
+            "defaultValue": "brk1155-teams"
+        },
+        "teams_1_Connection_Name": {
+            "type": "string",
+            "defaultValue": "teams"
+        },
+        "storageAccountType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_GRS",
+                "Standard_ZRS",
+                "Premium_LRS"
+            ],
+            "metadata": {
+                "description": "Storage Account type"
+            }
+        }
+    },
+    "variables": {
+        "textanalytics_name": "[concat(parameters('resourcename_base'), '-ta')]",
+        "logicapp_name": "[concat(parameters('resourcename_base'), '-monitor')]",
+        "storageAccountName": "[concat(parameters('resourcename_base'), 'sa')]",
+        "functionAppName": "[concat(parameters('resourcename_base'), '-func')]",
+        "storageAccountid": "[concat(resourceGroup().id,'/providers/','Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageAccountName')]",
+            "apiVersion": "2017-06-01",
+            "location": "[resourceGroup().location]",
+            "kind": "Storage",
+            "sku": {
+                "name": "[parameters('storageAccountType')]"
+            }
+        },
+        {
+            "apiVersion": "2015-08-01",
+            "type": "Microsoft.Web/sites",
+            "name": "[variables('functionAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsDashboard",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(variables('storageAccountid'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~1"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "6.5.0"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.CognitiveServices/accounts",
+            "sku": {
+                "name": "S0"
+            },
+            "kind": "TextAnalytics",
+            "name": "[variables('textanalytics_name')]",
+            "apiVersion": "2016-02-01-preview",
+            "location": "[resourcegroup().location]",
+            "scale": null,
+            "properties": {},
+            "dependsOn": []
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('cognitiveservicestextanalytics_1_Connection_Name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts', variables('textanalytics_name'))]"
+            ],
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'cognitiveservicestextanalytics')]"
+                },
+                "displayName": "[parameters('cognitiveservicestextanalytics_1_Connection_DisplayName')]",
+                "parameterValues": {
+                    "apiKey": "[listkeys(resourceId('Microsoft.CognitiveServices/accounts', variables('textanalytics_name')), '2017-04-18').key1]",
+                    "siteUrl": "[concat('https://', resourceGroup().location,'.api.cognitive.microsoft.com')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('teams_1_Connection_Name')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'teams')]"
+                },
+                "displayName": "[parameters('teams_1_Connection_DisplayName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('twitter_1_Connection_Name')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'twitter')]"
+                },
+                "displayName": "[parameters('twitter_1_Connection_DisplayName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "name": "[variables('logicapp_name')]",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts', variables('textanalytics_name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('cognitiveservicestextanalytics_1_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('teams_1_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('twitter_1_Connection_Name'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Condition": {
+                            "type": "If",
+                            "expression": "@greater(triggerBody()?['UserDetails']?['FollowersCount'], 50)",
+                            "actions": {
+                                "Detect_Sentiment": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['cognitiveservicestextanalytics']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/sentiment",
+                                        "body": {
+                                            "text": "@triggerBody()?['TweetText']"
+                                        }
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Post_message": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/groups/@{encodeURIComponent('ff4dc31a-a677-4ab8-80c6-a8a098053303')}/channels/@{encodeURIComponent('f1650ec7-c24f-4d64-b693-6fadf3e7d664')}/chatThreads",
+                                        "body": {
+                                            "rootMessage": {
+                                                "body": {
+                                                    "content": "<table>\n        <tr>\n          <td>\n            <tr>A new tweet about this talk with a sentiment score of @{body('Detect_Sentiment')?['score']} was posted:</tr>\n            <tr><p style=\"margin-top: 0px; width: 100%; margin-bottom: 0px;\">@{triggerBody()?['UserDetails']?['UserName']}</p></tr>\n            <tr><p style=\"margin-top: 0px; width: 100%; margin-bottom: 0px;\">&#64;@{triggerBody()?['TweetedBy']} - @{triggerBody()?['CreatedAtIso']}</p></tr>\n            <tr><p style=\"margin-top: 0px; width: 100%; margin-bottom: 0px;\">@{triggerBody()?['TweetText']}</p></tr>\n            <tr><a href=\"https://twitter.com/@{triggerBody()?['TweetedBy']}/status/@{triggerBody()?['TweetId']}\">View in Twitter</a></tr>\n          </td>\n        </tr>\n</table>",
+                                                    "contentType": 1
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Detect_Sentiment": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {}
+                        }
+                    },
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_new_tweet_is_posted": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['twitter']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/onnewtweet",
+                                "queries": {
+                                    "searchQuery": "#BRK1155 AND #MSTechSummit"
+                                }
+                            },
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 1
+                            },
+                            "splitOn": "@triggerBody()?['value']"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "cognitiveservicestextanalytics": {
+                                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'cognitiveservicestextanalytics')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('cognitiveservicestextanalytics_1_Connection_Name'))]",
+                                "connectionName": "[parameters('cognitiveservicestextanalytics_1_Connection_Name')]"
+                            },
+                            "teams": {
+                                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'teams')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('teams_1_Connection_Name'))]",
+                                "connectionName": "[parameters('teams_1_Connection_Name')]"
+                            },
+                            "twitter": {
+                                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'twitter')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('twitter_1_Connection_Name'))]",
+                                "connectionName": "[parameters('twitter_1_Connection_Name')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
