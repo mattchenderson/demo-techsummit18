@@ -242,6 +242,10 @@
                         {
                             "name": "PROJECT",
                             "value": "/FunctionApp"
+                        },
+                        {
+                            "name": "FUNCTION_APP_EDIT_MODE",
+                            "value": "readwrite"
                         }
                     ]
                 }
@@ -263,5 +267,10 @@
             ]
         }
     ],
-    "outputs": {}
+    "outputs": {
+        "ehcxnstr": {
+            "type": "string",
+            "value": "[listkeys(resourceId('Microsoft.EventHub/namespaces/AuthorizationRules', variables('hubNamespaceName'), 'RootManageSharedAccessKey'),'2015-08-01').primaryConnectionString]"
+          }        
+    }
 }
